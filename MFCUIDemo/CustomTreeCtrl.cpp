@@ -2,12 +2,14 @@
 #include "CustomTreeCtrl.h"
 #include "HighlightTextPainter.h"
 
+#define ADD_NODE_BUTTON_ID	700
+
 BEGIN_MESSAGE_MAP(CustomTreeCtrl, CTreeCtrl)
 	ON_NOTIFY_REFLECT(NM_CUSTOMDRAW, &CustomTreeCtrl::OnNMCustomdraw)
 	ON_WM_MOUSELEAVE()
 	ON_WM_MOUSEMOVE()
 	ON_WM_SIZE()
-	ON_BN_CLICKED(700, OnButtonClicked)
+	ON_BN_CLICKED(ADD_NODE_BUTTON_ID, OnButtonClicked)
 END_MESSAGE_MAP()
 
 
@@ -65,7 +67,7 @@ void CustomTreeCtrl::UpdateButtonVisibility()
 	{
 		if (!m_emptyButton.GetSafeHwnd())
 		{
-			m_emptyButton.Create(_T("Add Nodes"), WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON, CRect(), this, 700);
+			m_emptyButton.Create(_T("Add Nodes"), WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON, CRect(), this, ADD_NODE_BUTTON_ID);
 		}
 
 		UpdateButtonPosition();
@@ -261,8 +263,6 @@ LRESULT CustomTreeCtrl::WindowProc(UINT message, WPARAM wParam, LPARAM lParam)
 			return 0;
 		}
 	}
-
-
 
 	LRESULT result = CTreeCtrl::WindowProc(message, wParam, lParam);
 
