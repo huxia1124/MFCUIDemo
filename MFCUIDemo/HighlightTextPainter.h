@@ -3,6 +3,13 @@
 #include <string>
 #include <list>
 
+#ifdef _WIN32		// Windows (x64 and x86)
+#include <Windows.h>
+#include <midlbase.h>
+#include <gdiplus.h>
+
+#pragma comment(lib, "gdiplus")
+#endif
 
 class HighlightTextPainter
 {
@@ -15,14 +22,13 @@ public:
 
 	struct ITextPainter
 	{
-		virtual void MeasureText(const wchar_t* text, int len, int& cx, int& cy) = 0;
-		virtual void DrawText(const wchar_t* text, int len, int x, int y, int w, int h, bool highlight, bool selected) = 0;
+		virtual void MeasureText(const wchar_t* text, int len, float& cx, float& cy) = 0;
+		virtual void DrawText(const wchar_t* text, int len, float x, float y, float w, float h, bool highlight, bool selected) = 0;
 	};
-
 
 	HighlightTextPainter(const wchar_t* text, const wchar_t* keyword, bool multiLine = true);
 	HighlightTextPainter(ITextSplitter* splitter, const wchar_t* text, const wchar_t* keyword, bool multiLine = true);
-	void Draw(ITextPainter* painter, int x, int y, int w, int h, bool selected);
+	void Draw(ITextPainter* painter, float x, float y, float w, float h, bool selected);
 
 	// Default splitter implementation
 	class DefaultSplitter : public ITextSplitter
@@ -42,25 +48,48 @@ public:
 		GDIPainter(HDC hDC) : _hdc(hDC)
 		{}
 
-		virtual void MeasureText(const wchar_t* text, int len, int& cx, int& cy);
-		virtual void DrawText(const wchar_t* text, int len, int x, int y, int w, int h, bool highlight, bool selected);
+		virtual void MeasureText(const wchar_t* text, int len, float& cx, float& cy);
+		virtual void DrawText(const wchar_t* text, int len, float x, float y, float w, float h, bool highlight, bool selected);
 
 	protected:
 		HDC _hdc;
 	};
 
+#ifdef _WIN32		// Windows (x64 and x86)
+	// Default GDI Plus painter implementation
+	class GDIPlusPainter : public ITextPainter
+	{
+	public:
+		GDIPlusPainter(Gdiplus::Graphics& g, Gdiplus::Font& font, Gdiplus::StringFormat& format, BYTE alpha = 255)
+			: _graphics(g)
+			, _font(font)
+			, _format(format)
+			, _alpha(alpha)
+		{}
+
+		virtual void MeasureText(const wchar_t* text, int len, float& cx, float& cy);
+		virtual void DrawText(const wchar_t* text, int len, float x, float y, float w, float h, bool highlight, bool selected);
+
+	protected:
+		Gdiplus::Graphics& _graphics;
+		Gdiplus::Font& _font;
+		Gdiplus::StringFormat& _format;
+		BYTE _alpha;
+	};
+#endif
+
 protected:
 	struct TextInfo
 	{
 		bool highlight;
-		int offsetX;
-		int offsetY;
+		float offsetX;
+		float offsetY;
 		size_t linebreak;
 	};
 
-	int GetNumCharsInLine(ITextPainter* painter, const wchar_t* text, int len, int w);
-	void FindLineBreaks(ITextPainter* painter, int w, int h);
-	void ApplyLineBreaks(ITextPainter* painter, int w, int h);
+	int GetNumCharsInLine(ITextPainter* painter, const wchar_t* text, int len, float w);
+	void FindLineBreaks(ITextPainter* painter, float w, float h);
+	void ApplyLineBreaks(ITextPainter* painter, float w, float h);
 
 	bool _multiLineText;
 	std::wstring _text;		// Original text

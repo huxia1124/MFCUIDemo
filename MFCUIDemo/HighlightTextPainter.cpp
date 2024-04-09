@@ -1,5 +1,4 @@
 #include "pch.h"
-#include "framework.h"
 #include "HighlightTextPainter.h"
 #include <regex>
 #include <vector>
@@ -201,7 +200,7 @@ HighlightTextPainter::HighlightTextPainter(ITextSplitter* splitter, const wchar_
 	splitter->Split(text, keyword, _seg);
 }
 
-void HighlightTextPainter::Draw(ITextPainter* painter, int x, int y, int w, int h, bool selected)
+void HighlightTextPainter::Draw(ITextPainter* painter, float x, float y, float w, float h, bool selected)
 {
 	FindLineBreaks(painter, w, h);
 
@@ -226,10 +225,10 @@ void HighlightTextPainter::Draw(ITextPainter* painter, int x, int y, int w, int 
 	}
 }
 
-int HighlightTextPainter::GetNumCharsInLine(ITextPainter* painter, const wchar_t* text, int len, int w)
+int HighlightTextPainter::GetNumCharsInLine(ITextPainter* painter, const wchar_t* text, int len, float w)
 {
-	int cx = 0;
-	int cy = 0;
+	float cx = 0;
+	float cy = 0;
 	int r = 0;
 	painter->MeasureText(text, len, cx, cy);
 	if (cx > w)
@@ -302,7 +301,7 @@ int HighlightTextPainter::GetNumCharsInLine(ITextPainter* painter, const wchar_t
 	return r;
 }
 
-void HighlightTextPainter::FindLineBreaks(ITextPainter* painter, int w, int h)
+void HighlightTextPainter::FindLineBreaks(ITextPainter* painter, float w, float h)
 {
 	if (!_multiLineText)
 	{
@@ -320,10 +319,10 @@ void HighlightTextPainter::FindLineBreaks(ITextPainter* painter, int w, int h)
 	}
 }
 
-void HighlightTextPainter::ApplyLineBreaks(ITextPainter* painter, int w, int h)
+void HighlightTextPainter::ApplyLineBreaks(ITextPainter* painter, float w, float h)
 {
-	int offsetX = 0;
-	int offsetY = 0;
+	float offsetX = 0;
+	float offsetY = 0;
 	auto itBreak = _lineBreaks.begin();
 	for (auto it = _dynseg.begin(); it != _dynseg.end();)
 	{
@@ -334,8 +333,8 @@ void HighlightTextPainter::ApplyLineBreaks(ITextPainter* painter, int w, int h)
 		it->second.offsetY = offsetY;
 		size_t len = itNext == _dynseg.end() ? _text.length() - it->first : itNext->first - it->first;
 
-		int cx = 0;
-		int cy = 0;
+		float cx = 0;
+		float cy = 0;
 		painter->MeasureText(_text.c_str() + it->first, static_cast<int>(len), cx, cy);
 
 		// if there is a line-break in this segment
@@ -372,15 +371,15 @@ void HighlightTextPainter::ApplyLineBreaks(ITextPainter* painter, int w, int h)
 	}
 }
 
-void HighlightTextPainter::GDIPainter::MeasureText(const wchar_t* text, int len, int& cx, int& cy)
+void HighlightTextPainter::GDIPainter::MeasureText(const wchar_t* text, int len, float& cx, float& cy)
 {
 	SIZE size = {};
 	GetTextExtentPoint32W(_hdc, text, len, &size);
-	cx = size.cx;
-	cy = size.cy;
+	cx = static_cast<float>(size.cx);
+	cy = static_cast<float>(size.cy);
 }
 
-void HighlightTextPainter::GDIPainter::DrawText(const wchar_t* text, int len, int x, int y, int w, int h, bool highlight, bool selected)
+void HighlightTextPainter::GDIPainter::DrawText(const wchar_t* text, int len, float x, float y, float w, float h, bool highlight, bool selected)
 {
 	if (len <= 0)
 		return;
@@ -416,7 +415,7 @@ void HighlightTextPainter::GDIPainter::DrawText(const wchar_t* text, int len, in
 		::SetTextColor(_hdc, textClr);
 	}
 
-	RECT rc = { x, y, x + w, y + h };
+	RECT rc = { static_cast<int>(x), static_cast<int>(y), static_cast<int>(x + w), static_cast<int>(y + h) };
 
 	// No deed to draw '\n' and spaces after '\n'
 	int pos = len - 1;
@@ -434,3 +433,65 @@ void HighlightTextPainter::GDIPainter::DrawText(const wchar_t* text, int len, in
 	::SetBkColor(_hdc, oldBkColor);
 	::SetTextColor(_hdc, oldTextColor);
 }
+
+#ifdef _WIN32		// Windows (x64 and x86)
+void HighlightTextPainter::GDIPlusPainter::MeasureText(const wchar_t* text, int len, float& cx, float& cy)
+{
+	Gdiplus::RectF rectTextMain;
+	Gdiplus::RectF rectTextMeasured;
+	_graphics.MeasureString(text, len, &_font, rectTextMain, &_format, &rectTextMeasured);
+
+	cx = rectTextMeasured.Width;
+	cy = rectTextMeasured.Height;
+}
+
+void HighlightTextPainter::GDIPlusPainter::DrawText(const wchar_t* text, int len, float x, float y, float w, float h, bool highlight, bool selected)
+{
+	if (len <= 0)
+		return;
+
+	// No deed to draw '\n' and spaces after '\n'
+	int pos = len - 1;
+	while (pos > 0 && isspace(text[pos]) && text[pos] != '\n')
+		--pos;
+	if (text[pos] == '\n')
+		len = pos;
+
+	if (len <= 0)
+		return;
+
+	const DWORD clrHighlightText = RGB(255, 0, 0);
+	const DWORD clrHighlightBk = RGB(255, 255, 32);
+	const DWORD clrHighlightSelectedText = RGB(255, 255, 0);
+
+	DWORD textClr = GetSysColor(COLOR_WINDOWTEXT);
+	DWORD highlightBkCr = clrHighlightBk;
+	DWORD highlightClr = clrHighlightText;
+
+	if (selected)
+	{
+		textClr = GetSysColor(COLOR_HIGHLIGHTTEXT);
+		highlightBkCr = GetSysColor(COLOR_MENUHILIGHT) ^ 0x00FFFFFF;
+		highlightClr = clrHighlightSelectedText;
+	}
+
+	Gdiplus::RectF rectTextMain(x, y, w, h);
+	if (highlight)
+	{
+		float cx, cy;
+		MeasureText(text, len, cx, cy);
+		Gdiplus::RectF rectTextBk(x, y, cx, cy);
+
+		Gdiplus::SolidBrush bkBrush(Gdiplus::Color(static_cast<BYTE>(_alpha), GetRValue(highlightBkCr), GetGValue(highlightBkCr), GetBValue(highlightBkCr)));
+		_graphics.FillRectangle(&bkBrush, rectTextBk);
+
+		Gdiplus::SolidBrush textBrush(Gdiplus::Color(static_cast<BYTE>(_alpha), GetRValue(highlightClr), GetGValue(highlightClr), GetBValue(highlightClr)));
+		_graphics.DrawString(text, len, &_font, rectTextMain, &_format, &textBrush);
+	}
+	else
+	{
+		Gdiplus::SolidBrush textBrush(Gdiplus::Color(static_cast<BYTE>(_alpha), GetRValue(textClr), GetGValue(textClr), GetBValue(textClr)));
+		_graphics.DrawString(text, len, &_font, rectTextMain, &_format, &textBrush);
+	}
+}
+#endif

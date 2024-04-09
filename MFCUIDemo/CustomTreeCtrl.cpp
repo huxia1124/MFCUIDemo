@@ -186,7 +186,7 @@ void CustomTreeCtrl::OnNMCustomdraw(NMHDR* pNMHDR, LRESULT* pResult)
 
 			dc.SetBkColor(clrTextBk);
 
-			text.Draw(&painter, rcLabel.left, rcLabel.top, rcLabel.right - rcLabel.left, rcLabel.bottom - rcLabel.top, pNMCD->nmcd.uItemState & CDIS_SELECTED);
+			text.Draw(&painter, static_cast<float>(rcLabel.left), static_cast<float>(rcLabel.top), static_cast<float>(rcLabel.right - rcLabel.left), static_cast<float>(rcLabel.bottom - rcLabel.top), pNMCD->nmcd.uItemState & CDIS_SELECTED);
 
 			if (pNMCD->nmcd.uItemState & CDIS_FOCUS)
 			{
