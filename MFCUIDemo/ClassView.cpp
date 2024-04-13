@@ -87,6 +87,25 @@ int CClassView::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	}
 
 	m_wndClassView.SetExtendedStyle(TVS_EX_DOUBLEBUFFER, TVS_EX_DOUBLEBUFFER);
+	m_wndClassView.SetAdditionalTextCallback([](CustomTreeCtrl* tree, HTREEITEM item, CString& additionalText)
+		{
+
+			CString itemText = tree->GetItemText(item);
+			if (itemText.Find(_T("~")) != -1)
+			{
+				additionalText = _T("Destructor");
+			}
+			else
+			{
+				HTREEITEM parent = tree->GetParentItem(item);
+				if (parent)
+				{
+					CString parentItemText = tree->GetItemText(parent);
+					if(parentItemText + _T("()") == itemText)
+						additionalText = _T("Constructor");
+				}
+			}
+		});
 
 	m_search.Create(WS_VISIBLE | WS_CHILD | WS_BORDER, CRect(), this, 1001);
 	m_search.SetFont(&afxGlobalData.fontRegular);

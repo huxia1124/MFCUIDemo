@@ -1,12 +1,13 @@
 #pragma once
 #include <afxcmn.h>
+#include <functional>
 #include <map>
 
 class CustomTreeCtrl : public CTreeCtrl
 {
 public:
 	void SetHighlightTokens(const CString& tokens);
-
+	void SetAdditionalTextCallback(std::function<void(CustomTreeCtrl*, HTREEITEM, CString&)> callback);
 
 protected:
 
@@ -33,6 +34,6 @@ private:
 	HTREEITEM m_hoverItem = nullptr;
 	uint64_t m_highlightVer = 0;
 	std::map<HTREEITEM, uint64_t> m_childrenHighligh;
-
+	std::function<void(CustomTreeCtrl*, HTREEITEM, CString&)> m_additionalTextCallback;
 };
 

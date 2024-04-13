@@ -23,6 +23,11 @@ void CustomTreeCtrl::SetHighlightTokens(const CString& tokens)
 		Invalidate();
 }
 
+void CustomTreeCtrl::SetAdditionalTextCallback(std::function<void(CustomTreeCtrl*, HTREEITEM, CString&)> callback)
+{
+	m_additionalTextCallback = callback;
+}
+
 void CustomTreeCtrl::UpdateHoverItem(HTREEITEM item)
 {
 	if (m_hoverItem != item)
@@ -167,6 +172,29 @@ void CustomTreeCtrl::OnNMCustomdraw(NMHDR* pNMHDR, LRESULT* pResult)
 			clrTextBk = GetSysColor(COLOR_HIGHLIGHT);
 		}
 
+		if (m_additionalTextCallback)
+		{
+			CString additionalText;
+			m_additionalTextCallback(this, currentItem, additionalText);
+			if (!additionalText.IsEmpty())
+			{
+				CSize textSize = dc.GetTextExtent(additionalText);
+				HighlightTextPainter::DefaultSplitter splitter(false);
+				HighlightTextPainter text(&splitter, additionalText, m_highlightTokens);
+				CRect rcItem;
+				if (GetItemRect(currentItem, &rcItem, FALSE))
+				{
+					CRect rcAdditionalText(rcItem);
+					rcAdditionalText.left = rcAdditionalText.right - textSize.cx - static_cast<int>(afxGlobalData.GetRibbonImageScale() * 2.0);
+					HighlightTextPainter::GDIPainter painter(pNMCD->nmcd.hdc, true);
+
+					COLORREF oldTextColor = dc.SetTextColor(CDrawingManager::PixelAlpha(GetSysColor(COLOR_WINDOWTEXT), GetSysColor(COLOR_WINDOW), 50));
+					text.Draw(&painter, static_cast<float>(rcAdditionalText.left), static_cast<float>(rcAdditionalText.top), static_cast<float>(rcAdditionalText.Width()), static_cast<float>(rcAdditionalText.Height()), pNMCD->nmcd.uItemState & CDIS_SELECTED);
+					dc.SetTextColor(oldTextColor);
+				}
+			}
+		}
+
 		CString itemText = GetItemText(currentItem);
 
 		HighlightTextPainter::DefaultSplitter splitter(false);
@@ -186,7 +214,7 @@ void CustomTreeCtrl::OnNMCustomdraw(NMHDR* pNMHDR, LRESULT* pResult)
 
 			dc.SetBkColor(clrTextBk);
 
-			text.Draw(&painter, static_cast<float>(rcLabel.left), static_cast<float>(rcLabel.top), static_cast<float>(rcLabel.right - rcLabel.left), static_cast<float>(rcLabel.bottom - rcLabel.top), pNMCD->nmcd.uItemState & CDIS_SELECTED);
+			text.Draw(&painter, static_cast<float>(rcLabel.left), static_cast<float>(rcLabel.top), static_cast<float>(rcLabel.Width()), static_cast<float>(rcLabel.Height()), pNMCD->nmcd.uItemState & CDIS_SELECTED);
 
 			if (pNMCD->nmcd.uItemState & CDIS_FOCUS)
 			{
