@@ -2,14 +2,16 @@
 #include "CustomTreeCtrl.h"
 #include "HighlightTextPainter.h"
 
-#define ADD_NODE_BUTTON_ID	700
+#define TREE_EMPTY_BUTTON_ID	700
 
 BEGIN_MESSAGE_MAP(CustomTreeCtrl, CTreeCtrl)
 	ON_NOTIFY_REFLECT(NM_CUSTOMDRAW, &CustomTreeCtrl::OnNMCustomdraw)
 	ON_WM_MOUSELEAVE()
 	ON_WM_MOUSEMOVE()
 	ON_WM_SIZE()
-	ON_BN_CLICKED(ADD_NODE_BUTTON_ID, OnButtonClicked)
+	ON_BN_CLICKED(TREE_EMPTY_BUTTON_ID, OnButtonClicked)
+	ON_WM_CREATE()
+	ON_WM_SETFONT()
 END_MESSAGE_MAP()
 
 
@@ -26,6 +28,23 @@ void CustomTreeCtrl::SetHighlightTokens(const CString& tokens)
 void CustomTreeCtrl::SetAdditionalTextCallback(std::function<void(CustomTreeCtrl*, HTREEITEM, CString&)> callback)
 {
 	m_additionalTextCallback = callback;
+}
+
+void CustomTreeCtrl::SetEmptyMessage(LPCTSTR lpszEmptyMessage)
+{
+	m_emptyMessage = lpszEmptyMessage;
+
+	if (GetSafeHwnd())
+	{
+		UpdateButtonPosition();
+		Invalidate();
+	}
+}
+
+void CustomTreeCtrl::SetEmptyButton(LPCTSTR lpszButtonCaption)
+{
+	m_emptyButtonCaption = lpszButtonCaption;
+	UpdateButtonVisibility();
 }
 
 void CustomTreeCtrl::UpdateHoverItem(HTREEITEM item)
@@ -50,21 +69,31 @@ void CustomTreeCtrl::FullRowSelect(const CPoint& pt)
 
 }
 
-void CustomTreeCtrl::FullRowDoubleClick(const CPoint& pt)
+BOOL CustomTreeCtrl::FullRowDoubleClick(const CPoint& pt, HTREEITEM& item, bool& onItemRight)
 {
 	TVHITTESTINFO ti = {};
 	ti.pt = pt;
-	HTREEITEM item = HitTest(&ti);
+	item = HitTest(&ti);
 
 	CString itemText = GetItemText(item);
 
-	if (item && (ti.flags & (TVHT_ONITEMINDENT | TVHT_ONITEMRIGHT | TVHT_ONITEMLABEL)))
-		Expand(item, TVE_TOGGLE);
+	if (ItemHasChildren(item))
+	{
+		if (item && (ti.flags & (TVHT_ONITEMINDENT | TVHT_ONITEMRIGHT | TVHT_ONITEMLABEL)))
+		{
+			Expand(item, TVE_TOGGLE);
+			return TRUE;
+		}
+	}
+
+	onItemRight = (ti.flags & TVHT_ONITEMRIGHT);
+	
+	return FALSE;
 }
 
 void CustomTreeCtrl::UpdateButtonVisibility()
 {
-	if (GetRootItem())
+	if (GetRootItem() || m_emptyButtonCaption.IsEmpty())
 	{
 		m_emptyButton.DestroyWindow();
 	}
@@ -72,7 +101,8 @@ void CustomTreeCtrl::UpdateButtonVisibility()
 	{
 		if (!m_emptyButton.GetSafeHwnd())
 		{
-			m_emptyButton.Create(_T("Add Nodes"), WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON, CRect(), this, ADD_NODE_BUTTON_ID);
+			m_emptyButton.Create(m_emptyButtonCaption, WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON, CRect(), this, TREE_EMPTY_BUTTON_ID);
+			m_emptyButton.SetFont(GetFont());
 		}
 
 		UpdateButtonPosition();
@@ -81,15 +111,22 @@ void CustomTreeCtrl::UpdateButtonVisibility()
 
 void CustomTreeCtrl::UpdateButtonPosition()
 {
-	if (!m_emptyButton.GetSafeHwnd())
+	if (!m_emptyButton.GetSafeHwnd() || !GetSafeHwnd())
 		return;
 
-	const int buttonMaxWidth = static_cast<int>(afxGlobalData.GetRibbonImageScale() * 120.0);
-	const int buttonHeight = static_cast<int>(afxGlobalData.GetRibbonImageScale() * 18.0);
+	const int buttonMinWidth = static_cast<int>(afxGlobalData.GetRibbonImageScale() * 60.0);
+	const int buttonHeight = static_cast<int>(afxGlobalData.GetRibbonImageScale() * 20.0);
+	const int buttonPaddings = static_cast<int>(afxGlobalData.GetRibbonImageScale() * 4.0);
+
+	CClientDC dc(this);
+	CFont* pOldFont = dc.SelectObject(GetFont());
+	int buttonWidth = max(dc.GetTextExtent(m_emptyButtonCaption).cx + buttonPaddings * 2, buttonMinWidth);
+	dc.SelectObject(pOldFont);
+
 	CRect rcClient;
 	GetClientRect(rcClient);
 
-	const int buttonWidth = min(rcClient.Width(), buttonMaxWidth);
+	buttonWidth = min(rcClient.Width(), buttonWidth);
 	const int buttonOffset = max((rcClient.Width() - buttonWidth) / 2, 0);
 	m_emptyButton.MoveWindow(CRect(buttonOffset, buttonHeight, buttonOffset + buttonWidth, buttonHeight * 2));
 }
@@ -276,18 +313,35 @@ LRESULT CustomTreeCtrl::WindowProc(UINT message, WPARAM wParam, LPARAM lParam)
 		pt.x = GET_X_LPARAM(lParam);
 		pt.y = GET_Y_LPARAM(lParam);
 
-		FullRowDoubleClick(pt);
-		return 0;
+		HTREEITEM item;
+		bool onItemRight = false;
+		if(FullRowDoubleClick(pt, item, onItemRight))
+			return 0;
+		else
+		{
+			if (item && onItemRight)
+			{
+				NMHDR nm;
+				nm.code = NM_DBLCLK;
+				nm.hwndFrom = GetSafeHwnd();
+				nm.idFrom = GetDlgCtrlID();
+				GetParent()->SendMessage(WM_NOTIFY, nm.idFrom, reinterpret_cast<LPARAM>(&nm));
+				return 0;
+			}
+		}
 	}
 	else if (message == WM_PAINT)
 	{
 		if (!GetRootItem())
 		{
-			CPaintDC dc(this); // device context for painting
+			// The tree is empty
+			CPaintDC dc(this);
 			CRect rcClient;
 			GetClientRect(rcClient);
+			CFont* pOldFont = dc.SelectObject(GetFont());
 			dc.FillSolidRect(rcClient, GetSysColor(COLOR_WINDOW));
-			dc.DrawText(_T("Nothing here"), rcClient, DT_CENTER | DT_TOP | DT_SINGLELINE | DT_NOPREFIX);
+			dc.DrawText(m_emptyMessage, rcClient, DT_CENTER | DT_TOP | DT_SINGLELINE | DT_NOPREFIX);
+			dc.SelectObject(pOldFont);
 			return 0;
 		}
 	}
@@ -308,4 +362,27 @@ void CustomTreeCtrl::OnSize(UINT nType, int cx, int cy)
 
 	Invalidate();
 	UpdateButtonPosition();
+}
+
+
+int CustomTreeCtrl::OnCreate(LPCREATESTRUCT lpCreateStruct)
+{
+	if (CTreeCtrl::OnCreate(lpCreateStruct) == -1)
+		return -1;
+
+	UpdateButtonVisibility();
+
+	return 0;
+}
+
+void CustomTreeCtrl::OnSetFont(CFont* pFont, BOOL bRedraw)
+{
+	Default();
+
+	if (m_emptyButton.GetSafeHwnd())
+	{
+		m_emptyButton.SetFont(pFont);
+		if (bRedraw)
+			Invalidate();
+	}
 }

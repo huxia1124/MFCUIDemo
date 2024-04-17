@@ -107,6 +107,9 @@ int CClassView::OnCreate(LPCREATESTRUCT lpCreateStruct)
 			}
 		});
 
+	m_wndClassView.SetEmptyMessage(_T("Nothing here"));
+	m_wndClassView.SetEmptyButton(_T("Add Nodes"));
+
 	m_search.Create(WS_VISIBLE | WS_CHILD | WS_BORDER, CRect(), this, 1001);
 	m_search.SetFont(&afxGlobalData.fontRegular);
 	m_search.SetCueBanner(_T("Search"));
